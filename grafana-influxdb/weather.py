@@ -8,22 +8,24 @@ import sys
 from dateutil.parser import isoparse
 
 
-def create_database(db_host, db_port, db_name):
+def create_database(db_host, db_port, db_name, token):
     if not db_name:
         raise Exception('create_database: no database specified')
 
     url = f"http://{db_host}:{db_port}/query"
+    # response = requests.post(url, params=dict(q=f"CREATE DATABASE {db_name}"), headers={'Authorization': f'Token {token}'})
     response = requests.post(url, params=dict(q=f"CREATE DATABASE {db_name}"))
     logging.info(response.url)
     if response.status_code != requests.codes.ok:
         raise Exception(f'create_database: {response.status_code}:{response.reason}')
 
 
-def drop_database(db_host, db_port, db_name):
+def drop_database(db_host, db_port, db_name, token):
     if not db_name:
         raise Exception('drop_database: no database specified')
 
     url = f"http://{db_host}:{db_port}/query"
+    # response = requests.post(url, params=dict(q=f"DROP DATABASE {db_name}"), headers={"Authorization": f"Token {token}"})
     response = requests.post(url, params=dict(q=f"DROP DATABASE {db_name}"))
     logging.info(response.url)
     if response.status_code != requests.codes.ok:
@@ -73,14 +75,15 @@ def get_station_info(station):
     return info
 
 
-def load_wx_data(db_host, db_port, db_name, input_file):
+def load_wx_data(db_host, db_port, db_name, input_file, token):
     if not db_name:
         raise Exception(f'drop: no database specified')
 
-    create_database(db_host=db_host, db_port=db_port, db_name=db_name)
+    create_database(db_host=db_host, db_port=db_port, db_name=db_name, token=token)
 
     url = f"http://{db_host}:{db_port}/write"
     data = input_file.read()
+    # response = requests.post(url, params=dict(db=db_name, precision="s"), data=data, headers={"Authorization": f"Token {token}"})
     response = requests.post(url, params=dict(db=db_name, precision="s"), data=data)
     if response.status_code != requests.codes.no_content:
         raise Exception(f"load_wx_data: {response.status_code}:{response.reason}")
@@ -141,6 +144,9 @@ def process_cli():
 
     parser.add_argument('--stations', dest='stations',
                         help="list of stations to gather weather data from")
+    
+    parser.add_argument('--token', dest='token',
+                        help="Auth token from influxDB")
 
     return parser.parse_args()
 
@@ -150,13 +156,13 @@ def main():
     args = process_cli()
 
     if args.drop:
-        drop_database(db_host=args.host, db_port=args.port, db_name=args.database)
+        drop_database(db_host=args.host, db_port=args.port, db_name=args.database, token=args.token)
 
     if args.output_file:
         dump_wx_data(args.stations, args.output_file)
 
     if args.input_file:
-        load_wx_data(db_host=args.host, db_port=args.port, db_name=args.database, input_file=args.input_file)
+        load_wx_data(db_host=args.host, db_port=args.port, db_name=args.database, input_file=args.input_file, token=args.token)
 
 
 if __name__ == '__main__':
