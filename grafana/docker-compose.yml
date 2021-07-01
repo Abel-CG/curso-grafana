@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  grafana:
+    image: "grafana/grafana:${TAG-latest}"
+    ports:
+      - "3000:3000"
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "true"
+      GF_AUTO_ASSIGN_ORG_RULE: "Editor"
+    volumes:
+      - "${PWD-.}/grafana:/var/lib/grafana"
