@@ -9,8 +9,8 @@
  sudo kubectl apply -f traefik-metrics-service.yaml -n kube-system
  
  #Check traefik
- kubectl port-forward service/traefik-dashboard 9000:9000 -n kube-system
  sudo kubectl port-forward service/traefik-dashboard 9000:9000 -n kube-system
+ sudo kubectl port-forward service/traefik-metrics 9100:9100 -n kube-system
 
  # Install Prometheus
  helm install prometheus-stack prometheus-community/kube-prometheus-stack
