@@ -1,4 +1,3 @@
-version: '3'
 
 services:
   grafana:
@@ -6,7 +5,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - "${PWD-.}/grafana:/var/lib/grafana"
+      - "${PWD-.}/grafana-storage:/var/lib/grafana"
 
   prometheus:
     image: "prom/prometheus:${PROM_TAG-latest}"
@@ -14,3 +13,8 @@ services:
       - "9090:9090"
     volumes:
       - "${PWD-.}/prometheus:/etc/prometheus"
+
+  node-exporter:
+    image: "prom/node-exporter:${PROM_TAG-latest}"
+    ports:
+      - "9100:9100"
