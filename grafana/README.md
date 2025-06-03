@@ -71,7 +71,7 @@ En este módulo desplegaremos un stack completo de monitorización utilizando:
 
 3. **Verifica que ambos servicios están corriendo:**
 
-   - Prometheus: [http://localhost:9090/targets](http://localhost:9090/targets)
-   - Node Exporter: [http://localhost:9100/targets](http://localhost:9100/targets)
+   - Prometheus: [http://localhost:9090/](http://localhost:9090/targets)
+   - Node Exporter: [http://localhost:9100/metrics](http://localhost:9100/targets)
 
 
