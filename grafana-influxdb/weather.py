@@ -1,109 +1,134 @@
+#!/usr/bin/python3
+
 import argparse
 import logging
 import requests
 import sys
 
-
-def escape_string(string):
-    return string.translate(string.maketrans({",": "\,", " ": "\ ", "=": "\="}))
+from dateutil.parser import isoparse
 
 
-def create_database(db_host, db_port, db_name):
-    if not db_name:
-        raise Exception('create_database: no database specified')
-
-    url = f"http://{db_host}:{db_port}/query"
-    response = requests.post(url, params=dict(q=f"CREATE DATABASE {db_name}"))
-    logging.info(response.url)
-    if response.status_code != requests.codes.ok:
-        raise Exception(f'create_database: {response.status_code}:{response.reason}')
+def iso_to_timestamp(ts):
+    return int(isoparse(ts).timestamp())
 
 
-def drop_database(db_host, db_port, db_name):
-    if not db_name:
-        raise Exception('drop_database: no database specified')
-
-    url = f"http://{db_host}:{db_port}/query"
-    response = requests.post(url, params=dict(q=f"DROP DATABASE {db_name}"))
-    logging.info(response.url)
-    if response.status_code != requests.codes.ok:
-        raise Exception(f'drop_database: {response.status_code}:{response.reason}')
-
-
-def dump_eq_data(size, window, output):
-    url = f"https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/{size}_{window}.geojson"
+def get_station_obs(station):
+    url = f"https://api.weather.gov/stations/{station}/observations"
     response = requests.get(url)
     logging.info(response.url)
     if response.status_code != requests.codes.ok:
-        raise Exception(f"dump_eq_data: {response.status_code}:{response.reason}")
+        raise Exception(f"get_station_obs: {response.status_code}:{response.reason}")
 
-    for feature in response.json()['features']:
-        measure = "event"
+    data = response.json()["features"]
+    return data
 
-        mag = feature['properties']['mag']
-        if mag is None:
-            logging.error(f"bad event: {feature}")
-            continue
 
-        place = feature['properties']['place']
-        lon, lat, dep = feature['geometry']['coordinates']
+def get_station_info(station):
+    info = {}
 
+    url = f"https://api.weather.gov/stations/{station}"
+    response = requests.get(url)
+    logging.info(response.url)
+    if response.status_code != requests.codes.ok:
+        raise Exception(f"get_station_info: {response.status_code}:{response.reason}")
+
+    station_properties = response.json()["properties"]
+    info["station_name"] = station_properties["name"].split(",")
+    info["station_id"] = station_properties["stationIdentifier"]
+
+    url = station_properties["county"]
+    response = requests.get(url)
+    logging.info(response.url)
+    if response.status_code != requests.codes.ok:
+        raise Exception(f"get_station_info: {response.status_code}:{response.reason}")
+
+    county_properties = response.json()["properties"]
+    info["county"] = county_properties["name"]
+    info["state"] = county_properties["state"]
+    info["cwa"] = county_properties["cwa"]
+    info["timezone"] = county_properties["timeZone"]
+
+    return info
+
+
+def load_wx_data(db_host, db_port, db_name, token, input_file):
+    if not db_name:
+        raise Exception(f"load_wx_data: no database specified")
+
+    url = f"http://{db_host}:{db_port}/write"
+    headers = {"Authorization": f"Token {token}"}
+    data = input_file.read()
+    response = requests.post(
+        url, params=dict(db=db_name, precision="s"), headers=headers, data=data
+    )
+    logging.info(response.url)
+    if response.status_code != requests.codes.no_content:
+        raise Exception(f"load_wx_data: {response.status_code}:{response.reason}")
+
+
+def escape_string(string):
+    return string.translate(string.maketrans({",": r"\,", " ": r"\ ", "=": r"\="}))
+
+
+def dump_wx_data(stations, output):
+    for s in stations.split(","):
+        station_info = get_station_info(s)
         tags = [
-            f"latitude={lat}",
-            f"longitude={lon}",
-            f"place={escape_string(place)}",
-            f"magnitude={escape_string(str(mag))}"
+            f'station={escape_string(station_info["station_id"])}',
+            f'name={escape_string(",".join(station_info["station_name"]))}',
+            f'cwa={escape_string(station_info["cwa"][0])}',
+            f'county={escape_string(station_info["county"])}',
+            f'state={escape_string(station_info["state"])}',
+            f'tz={escape_string(station_info["timezone"][0])}',
         ]
 
-        metrics = [
-            f"magnitude={mag}",
-            f"depth={dep}",
-        ]
+        wx_data = get_station_obs(s)
+        for feature in wx_data:
+            for measure, observation in feature["properties"].items():
+                if not isinstance(observation, dict) or measure in ["elevation"]:
+                    continue
 
-        timestamp = feature['properties']['time']
+                value = observation["value"]
+                if value is None:
+                    continue
 
-        data = f"{measure},{','.join(tags)} {','.join(metrics)} {timestamp}\n"
-        logging.debug(data)
-        output.write(data)
+                unit = observation["unitCode"]
+
+                timestamp = iso_to_timestamp(feature["properties"]["timestamp"])
+
+                data = f'{measure},{",".join(tags)},unit={unit} value={value} {timestamp}\n'
+                output.write(data)
 
     output.close()
 
 
-def load_eq_data(db_host, db_port, db_name, input_file):
-    if not db_name:
-        raise Exception(f'drop: no database specified')
-
-    create_database(db_host=db_host, db_port=db_port, db_name=db_name)
-
-    url = f"http://{db_host}:{db_port}/write"
-    data = input_file.read().encode('utf-8')
-    response = requests.post(url, params=dict(db=db_name, precision="ms"), data=data)
-    if response.status_code != requests.codes.no_content:
-        raise Exception(f"load_eq_data: {response.status_code}:{response.reason}")
-
-
 def process_cli():
-    parser = argparse.ArgumentParser(description="read earthquake data from USGS into Influxdb")
-    file_group = parser.add_mutually_exclusive_group()
+    parser = argparse.ArgumentParser(
+        description="read forecast data from NWS into Influxdb"
+    )
+    group = parser.add_mutually_exclusive_group()
 
-    parser.add_argument('--host', dest='host', default='localhost',
-                        help='database host')
-    parser.add_argument('--port', dest='port', type=int, default=8086,
-                        help='database port')
-    parser.add_argument('--db', dest='database',
-                        help="name of database to store data in")
-    parser.add_argument('--drop', dest='drop', action='store_true',
-                        help='drop database')
-    file_group.add_argument('--input', dest='input_file', type=argparse.FileType('r'),
-                            help="input file")
-    file_group.add_argument('--output', dest='output_file', type=argparse.FileType('w'),
-                            help='output file')
-
-    parser.add_argument("--size", dest="size", choices=['significant', '4.5', '2.5', '1.0', 'all'],
-                        default='significant', help="earthquake size")
-    parser.add_argument("--window", dest="window", choices=['hour', 'day', 'week', 'month'],
-                        default='hour', help="earthquake time window")
-
+    parser.add_argument(
+        "--host", dest="host", default="localhost", help="database host"
+    )
+    parser.add_argument(
+        "--port", dest="port", type=int, default=8086, help="database port"
+    )
+    parser.add_argument(
+        "--db", dest="database", help="name of database to store data in"
+    )
+    parser.add_argument(
+        "--stations",
+        dest="stations",
+        help="list of stations to gather weather data from",
+    )
+    parser.add_argument("--token", dest="token", help="InfluxDB API token")
+    group.add_argument(
+        "--input", dest="input_file", type=argparse.FileType("r"), help="input file"
+    )
+    group.add_argument(
+        "--output", dest="output_file", type=argparse.FileType("w"), help="output file"
+    )
     return parser.parse_args()
 
 
@@ -111,17 +136,20 @@ def main():
     logging.basicConfig(level=logging.INFO)
     args = process_cli()
 
-    if args.drop:
-        drop_database(db_host=args.host, db_port=args.port, db_name=args.database)
-
     if args.output_file:
-        dump_eq_data(args.size, args.window, args.output_file)
+        dump_wx_data(args.stations, args.output_file)
 
     if args.input_file:
-        load_eq_data(db_host=args.host, db_port=args.port, db_name=args.database, input_file=args.input_file)
+        load_wx_data(
+            db_host=args.host,
+            db_port=args.port,
+            db_name=args.database,
+            token=args.token,
+            input_file=args.input_file,
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as err:

@@ -1,0 +1,17 @@
+services:
+  grafana:
+    image: "grafana/grafana:${GRAF_TAG-latest}"
+    ports:
+      - "3000:3000"
+    environment:
+      GF_INSTALL_PLUGINS: grafana-worldmap-panel
+    volumes:
+      - "${PWD-.}/grafana-storage:/var/lib/grafana"
+
+  influxdb:
+    image: "influxdb:${INFL_TAG-latest}"
+    ports:
+      - "8086:8086"
+    volumes:
+      - "${PWD-.}/influxdb2-storage:/var/lib/influxdb2"
+
