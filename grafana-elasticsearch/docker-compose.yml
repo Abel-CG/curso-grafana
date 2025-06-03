@@ -19,6 +19,9 @@ services:
 
   logstash:
     image: docker.elastic.co/logstash/logstash:${LS_TAG-8.6.1}
+    environment:
+      - LOG_LEVEL=debug
+      - LS_SETTINGS_DIR=/usr/share/logstash/config
     volumes:
       - "${PWD-.}/logstash:/usr/share/logstash/pipeline"
       - "${PWD-.}/data:/data"
