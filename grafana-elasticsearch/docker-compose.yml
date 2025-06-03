@@ -1,22 +1,24 @@
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.7.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
     ports:
       - "9200:9200"
     environment:
       - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ingest.geoip.downloader.enabled=false
     volumes:
-      - "${PWD-.}/elasticsearch:/usr/share/elasticsearch/data"
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:7.7.0
-    volumes:
-      - "${PWD-.}/logstash:/usr/share/logstash/pipeline"
-      - "${PWD-.}/data:/data"
+      - "${PWD-.}/elasticsearch-storage/data:/usr/share/elasticsearch/data"
 
   grafana:
-    image: grafana/grafana:latest
+    image: "grafana/grafana:${GRAF_TAG-latest}"
     ports:
       - "3000:3000"
     volumes:
-      - "${PWD-.}/grafana:/var/lib/grafana"
+      - "${PWD-.}/grafana-storage:/var/lib/grafana"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${LS_TAG-8.6.1}
+    volumes:
+      - "${PWD-.}/logstash:/usr/share/logstash/pipeline"
+      - "${PWD-.}/data:/data"
