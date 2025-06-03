@@ -1,41 +1,100 @@
-Vamos a crear un dashboard super chulo basado en influxDB
 
-Primero levantamos grafana e influxdb:
-$: docker-compose -f docker-compose-influxdb.yml up
+# 🌦️ Dashboard de Meteorología con InfluxDB y Grafana
 
-Comprobamos que todo funciona correctamente:
-localhost:3000
-localhost:8086
+Este proyecto crea un **dashboard atractivo** usando datos meteorológicos y la base de datos **InfluxDB** como fuente.
 
-Creamos el contenedor de Python
+---
+
+## 🚀 Paso 1: Levantar InfluxDB y Grafana
+
+```bash
+docker-compose -f docker-compose-influxdb.yml up
+```
+
+### Verifica que están corriendo:
+
+- Grafana: [http://localhost:3000](http://localhost:3000)
+- InfluxDB: [http://localhost:8086](http://localhost:8086)
+
+---
+
+## 🐍 Paso 2: Preparar el contenedor de Python
+
+Construye la imagen:
+
+```bash
 docker build --pull --tag python/ch5 .
+```
 
-Comprobamos que el script funciona bien:
+Verifica que el script funciona:
+
+```bash
 docker run python/ch5 weather.py --help
+```
 
-Y ahora lo ejecutamos para conseguir los datos de San Francisco:
-docker run --rm -v "$(pwd):/usr/src/app" python/ch5 weather.py --output wx.txt  --stations KSFO,KDEN,KSTL,KJFK
+---
 
-Ya tenemos los datos!!!! 
+## 🌍 Paso 3: Obtener datos meteorológicos
 
-Ahora preparamos la base de datos InfluxDB
+Ejecuta el script para obtener datos de estaciones:
 
-Configura usuario, password, organización y Bucket (primer repositorio)
+```bash
+docker run --rm -v "$(pwd):/usr/src/app" python/ch5 weather.py --output wx.txt --stations KSFO,KDEN,KSTL,KJFK
+```
 
-Genera un API Token
+---
 
-Lo guardamos en un sitio seguro: J0nv4GnIMJk5IO7YADS913jS-X1V51KU9DJxH67XISLfkNi2wlYhryagURSrbT17R5q7IFmKOartZo65VtRr0A==
+## 🛠️ Paso 4: Configurar InfluxDB
 
-Y ejecutamos otra vez el script, pero en este caso indicamos el como origen nuestro fichero:
- docker run --rm --network host -v $(pwd):/usr/src/app python/ch5 weather.py --input wx.txt --db weather --token J0nv4GnIMJk5IO7YADS913jS-X1V51KU9DJxH67XISLfkNi2wlYhryagURSrbT17R5q7IFmKOartZo65VtRr0A==
+1. Accede a InfluxDB y configura:
+   - Usuario
+   - Contraseña
+   - Organización
+   - **Bucket** (repositorio de datos)
 
-Ya teneos los datos salvados en Influxdb!!!
+2. Genera un **API Token** y guárdalo en lugar seguro.
 
-Ahora configuramos Influxdb como datasource (Recordad añadir el API token)
-Custom header name Authorization value: Token <API_TOKEN>
-db: weather
+> Ejemplo de token:
+```
+Token J0nv4GnIMJk5IO7YADS913jS-X1V51KU9DJxH67XISLfkNi2wlYhryagURSrbT17R5q7IFmKOartZo65VtRr0A==
+```
 
-TIP
-Si queremos volver a meter los datos, añadir más estaciones metereológicas, se borra el bucket en influxdb y se vuelve a empezar el proceso.
+---
 
+## 📥 Paso 5: Insertar los datos en InfluxDB
 
+Ejecuta el script para cargar los datos:
+
+```bash
+docker run --rm --network host -v $(pwd):/usr/src/app python/ch5 weather.py --input wx.txt --db weather --token <API_TOKEN>
+```
+
+---
+
+## 📊 Paso 6: Configurar InfluxDB como DataSource en Grafana
+
+1. Ve a Grafana > Configuration > Data Sources > Add data source
+2. Selecciona **InfluxDB**
+3. Usa los siguientes parámetros:
+   - URL: `http://localhost:8086`
+   - Token: `Token <API_TOKEN>`
+   - Org: Tu organización
+   - Bucket: `weather`
+
+> 🔐 En custom header:
+```
+Authorization: Token <API_TOKEN>
+```
+
+---
+
+## 💡 TIP
+
+Si deseas volver a cargar datos o añadir nuevas estaciones:
+
+1. Borra el bucket en InfluxDB.
+2. Ejecuta nuevamente el proceso desde el Paso 3.
+
+---
+
+¡Y listo! Ya tienes tus datos meteorológicos visualizados en Grafana 🎉
