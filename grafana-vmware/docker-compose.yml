@@ -1,0 +1,59 @@
+services:
+
+  grafana:
+    image: "grafana/grafana:${GRAF_TAG-latest}"
+    ports:
+      - "3000:3000"
+    volumes:
+      - "${PWD-.}/grafana-storage:/var/lib/grafana"
+
+  prometheus:
+    image: "prom/prometheus:${PROM_TAG-latest}"
+    ports:
+      - "9090:9090"
+    volumes:
+      - "${PWD-.}/prometheus:/etc/prometheus"
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    volumes:
+      - ./textfile_collector:/textfile_collector
+    command:
+      - '--collector.textfile.directory=/textfile_collector'
+      - '--path.rootfs=/host'
+    ports:
+      - "9100:9100"
+
+  metrics-generator:
+    image: alpine:latest
+    container_name: metrics-generator
+    volumes:
+      - ./scripts:/scripts
+      - ./textfile_collector:/textfile_collector
+    entrypoint: >
+      sh -c "apk add --no-cache bash coreutils && 
+             while true; do 
+               bash /scripts/generate_metrics.sh; 
+               sleep 5; 
+             done"
+  logs-generator:
+    image: alpine/curl
+    container_name: metrilogscs-generator
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: >
+      sh -c "apk add --no-cache bash coreutils && 
+               bash /scripts/generate_logs.sh; 
+             done"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ingest.geoip.downloader.enabled=false
+    volumes:
+      - "${PWD-.}/elasticsearch-storage/data:/usr/share/elasticsearch/data"
